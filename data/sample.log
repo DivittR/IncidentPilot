@@ -1,0 +1,7 @@
+2026-11-18 10:00:01 INFO checkout Server started
+2026-11-18 10:00:05 ERROR checkout Payment gateway timeout
+[2026-11-18 10:00:08] WARNING: High response time
+2026-11-18 10:00:12 ERROR [checkout] Database connection failed
+{"timestamp":"2026-11-18T10:00:15","level":"INFO","service":"checkout","message":"Request processed"}
+{"@timestamp":"2026-11-18T10:00:20","severity":"CRITICAL","service_name":"payment","msg":"Payment service unavailable"}
+INVALID LOG
