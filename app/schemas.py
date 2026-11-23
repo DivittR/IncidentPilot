@@ -8,3 +8,7 @@ class UploadResponse(BaseModel):
     total_lines: int
     parsing_status: str
     message: str
+# Defines the JSON data expected from the client
+class IncidentQuery(BaseModel):
+    service: str
+    level: str
