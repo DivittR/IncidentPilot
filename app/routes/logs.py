@@ -1,6 +1,11 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+
 from app.schemas import UploadResponse
-from app.services.log_service import count_log_lines
+from app.services.log_service import (
+    parse_log_content,
+    group_similar_errors
+)
 
 MAX_FILE_SIZE = 1 * 1024 * 1024  # Maximum upload size: 1 MB
 
@@ -8,9 +13,18 @@ router = APIRouter()
 
 
 @router.post("/upload", response_model=UploadResponse)
-async def upload_logs(file: UploadFile = File(...)):
+async def upload_logs(
+    file: UploadFile = File(...),
+    log_type: str = Query("application")
+):
+    # Validate log type
+    if log_type not in ["application", "apache"]:
+        raise HTTPException(
+            status_code=400,
+            detail="log_type must be application or apache"
+        )
 
-    # Check whether the uploaded file has an allowed extension
+    # Validate file extension
     if not file.filename or not file.filename.lower().endswith((".log", ".txt")):
         raise HTTPException(
             status_code=400,
@@ -19,15 +33,16 @@ async def upload_logs(file: UploadFile = File(...)):
 
     # Read at most 1 MB plus one extra byte
     content = await file.read(MAX_FILE_SIZE + 1)
+    await file.close()
 
-    # Reject files larger than 1 MB
+    # Validate file size
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413,
             detail="File size cannot exceed 1 MB"
         )
 
-    # Convert file bytes into readable text
+    # Convert bytes into readable text
     try:
         text_content = content.decode("utf-8")
     except UnicodeDecodeError:
@@ -36,11 +51,25 @@ async def upload_logs(file: UploadFile = File(...)):
             detail="File must contain valid UTF-8 text"
         )
 
-    # Count the number of lines in the file
-    total_lines = count_log_lines(text_content)
+    # Parse log lines into structured records
+    result = parse_log_content(text_content, log_type)
+
+    parsed_records = result["parsed_records"]
+    invalid_lines = result["invalid_lines"]
+
+    # Group repeated errors into incidents
+    incidents = group_similar_errors(parsed_records)
+
+    # Return the complete analysis
     return UploadResponse(
         filename=file.filename,
-        total_lines=total_lines,
-        parsing_status="received",
-        message="File uploaded successfully"
+        log_type=log_type,
+        total_lines=result["total_lines"],
+        parsed_lines=len(parsed_records),
+        invalid_lines_count=len(invalid_lines),
+        parsing_status="completed",
+        message="Log file parsed and analyzed successfully",
+        parsed_records=parsed_records,
+        invalid_lines=invalid_lines,
+        incidents=incidents
     )
